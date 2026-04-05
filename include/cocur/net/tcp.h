@@ -28,15 +28,15 @@ public:
 };
 
 class TcpClient : public Socket {
-    static int connect(const std::string &server_addr);
-
     TcpClient(int fd, IOEngine &engine) : Socket(fd, engine) {
+    }
+
+    TcpClient(Socket &&socket) : Socket(std::move(socket)) {
     }
 
 public:
     friend class TcpListner;
 
-    TcpClient(const std::string &to, IOEngine &engine) : Socket(connect(to), engine) {
-    }
+    static Task<TcpClient> connect(const std::string &to, IOEngine &engine);
 };
 } // namespace cocur

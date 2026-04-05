@@ -1,0 +1,43 @@
+#include <cocur/net/tcp.h>
+#include <cocur/uring/engine.h>
+#include <gtest/gtest.h>
+
+cocur::Task<> handle_client(cocur::IOEngine &engine, std::shared_ptr<cocur::TcpClient> client) {
+    std::byte buffer[1000] = {};
+    auto span = std::span(buffer, sizeof(buffer));
+
+    while (true) {
+        auto read = co_await client->recv(span);
+        if (read == 0)
+            break;
+
+        co_await client->send(std::span(buffer, read));
+    }
+}
+
+cocur::Task<> server(cocur::IOEngine &engine) {
+    cocur::TcpListner sock("0.0.0.0:9998", engine);
+
+    auto client = co_await sock.accept();
+    co_await handle_client(engine, client);
+}
+
+cocur::Task<> client(cocur::IOEngine &engine) {
+    cocur::TcpClient sock = co_await cocur::TcpClient::connect("0.0.0.0:9998", engine);
+
+    std::byte buffer[1000];
+    auto span = std::span(buffer, sizeof(buffer));
+
+    co_await sock.send("hello");
+    auto read = co_await sock.recv(span);
+
+    EXPECT_EQ(read, 6);
+    EXPECT_EQ("hello", std::string((char *)buffer, read - 1));
+}
+
+TEST(Engine, SimpleSocket) {
+    cocur::IOEngine engine;
+
+    engine.spawn(server(engine));
+    engine.block_on(client(engine));
+}

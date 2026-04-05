@@ -38,6 +38,13 @@ public:
         io_uring_submit(&ring_);
     }
 
+    void attachConnect(int fd, const struct sockaddr *addr, size_t size, void *data) {
+        auto sqe = allocate_sqe(data);
+
+        io_uring_prep_connect(sqe, fd, addr, size);
+        io_uring_submit(&ring_);
+    }
+
     void attachWrite(int fd, const void *buffer, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 

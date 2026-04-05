@@ -43,26 +43,29 @@ Task<ssize_t> Socket::recv(std::span<std::byte> &span) {
     co_return read;
 }
 
-Task<ssize_t> Socket::send(const std::span<std::byte> &span) {
+Task<ssize_t> Socket::connect(struct sockaddr *addr, size_t size) {
+    ssize_t read = co_await detail::Connect{*this, addr, size};
+    co_return read;
+}
+
+Task<ssize_t> Socket::sendImpl(std::span<const std::byte> span) {
     ssize_t written = co_await detail::Write{*this, span};
     co_return written;
 }
 
-int TcpClient::connect(const std::string &server_addr) {
+Task<TcpClient> TcpClient::connect(const std::string &server_addr, IOEngine &engine) {
     auto addr = cocur::string_to_address(server_addr);
 
-    int fd_ = socket(PF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (fd_ < 0)
-        throw std::runtime_error("Failed to create a socket");
+    Socket sock = Socket(engine);
 
     struct sockaddr_in in;
     in.sin_family = AF_INET;
     in.sin_port = addr.port;
     in.sin_addr = addr.address;
 
-    int res = ::connect(fd_, (struct sockaddr *)&in, sizeof(in));
+    int res = co_await sock.connect((struct sockaddr *)&in, sizeof(in));
     if (res < 0)
-        throw std::runtime_error("Failed to connect");
+        throw std::runtime_error("Failed to connect " + std::to_string(errno));
 
-    return fd_;
+    co_return TcpClient(std::move(sock));
 }

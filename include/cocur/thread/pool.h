@@ -32,17 +32,25 @@ public:
 } // namespace detail
 
 class ThreadPool {
-    std::vector<std::thread> threads_;
+    std::vector<std::jthread> threads_;
 
     std::mutex pending_mutex_;
     std::deque<detail::Job> pending_jobs_;
     std::condition_variable wait_jobs_;
+    std::atomic<bool> stop_;
+
+    bool should_stop() {
+        return stop_.load(std::memory_order_relaxed);
+    }
 
     void work_thread() {
-        while (1) {
+        while (!should_stop()) {
             std::unique_lock guard(pending_mutex_);
 
-            wait_jobs_.wait(guard, [&]() { return pending_jobs_.size() != 0; });
+            wait_jobs_.wait(guard, [&]() { return pending_jobs_.size() != 0 || should_stop(); });
+
+            if (should_stop())
+                break;
 
             auto job = pending_jobs_.front();
             pending_jobs_.pop_front();
@@ -64,7 +72,7 @@ public:
         const auto processor_count = std::thread::hardware_concurrency();
 
         for (auto i = 0; i < processor_count; ++i) {
-            auto t = std::thread([id = i, this]() {
+            auto t = std::jthread([id = i, this]() {
                 pid_t pid = getpid();
                 cpu_set_t cpu_set;
 
@@ -78,9 +86,13 @@ public:
                 work_thread();
             });
 
-            t.detach();
             threads_.push_back(std::move(t));
         }
+    }
+
+    ~ThreadPool() {
+        stop_.store(true, std::memory_order_relaxed);
+        wait_jobs_.notify_all();
     }
 };
 } // namespace cocur

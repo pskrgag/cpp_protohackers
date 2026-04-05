@@ -4,6 +4,7 @@ add_executable(tests
 	bounded_spsc.cpp
 	unbounded_spsc.cpp
 	net/helpers.cpp
+	engine.cpp
 )
 
 set_target_properties(tests PROPERTIES

@@ -10,6 +10,7 @@
 #include <cocur/net/socket.h>
 #include <cocur/uring/engine.h>
 #include <errno.h>
+#include <print>
 
 namespace cocur {
 namespace detail {
@@ -27,7 +28,7 @@ public:
     bool await_suspend(std::coroutine_handle<> handle) noexcept {
         int res = static_cast<Call *>(this)->Call();
 
-        if (res == -1 && errno == EWOULDBLOCK) {
+        if (res == -1 && (errno == EWOULDBLOCK || errno == EINPROGRESS)) {
             sleeping_ = true;
             handle_ = handle;
             static_cast<Call *>(this)->PrepareSleep(handle, this);
@@ -90,7 +91,7 @@ private:
 
 class Write : public AsyncSyscall<Write> {
 public:
-    Write(const Socket &socket, const std::span<std::byte> &span) : socket_(socket), span_(span) {
+    Write(const Socket &socket, std::span<const std::byte> span) : socket_(socket), span_(span) {
     }
 
     int Call() noexcept {
@@ -103,7 +104,27 @@ public:
 
 private:
     const Socket &socket_;
-    const std::span<std::byte> &span_;
+    std::span<const std::byte> span_;
+};
+
+class Connect : public AsyncSyscall<Connect> {
+public:
+    Connect(const Socket &socket, struct sockaddr *addr, size_t size)
+        : socket_(socket), addr_(addr), size_(size) {
+    }
+
+    int Call() noexcept {
+        return ::connect(socket_.fd(), addr_, size_);
+    }
+
+    void PrepareSleep(std::coroutine_handle<> handle, AsyncSyscall<Connect> *parent) noexcept {
+        socket_.engine_.attachConnect(socket_, addr_, size_, parent);
+    }
+
+private:
+    const Socket &socket_;
+    struct sockaddr *addr_;
+    size_t size_;
 };
 
 } // namespace detail
