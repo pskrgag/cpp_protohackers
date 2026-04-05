@@ -35,7 +35,7 @@ int TcpListner::create_and_listen(const std::string &server_addr) {
 
 Task<std::shared_ptr<TcpClient>> TcpListner::accept() {
     int fd = co_await detail::Accept{*this};
-    co_return std::shared_ptr<TcpClient>(new TcpClient(fd, engine_));
+    co_return std::make_shared<TcpClient>(fd, engine_);
 }
 
 Task<ssize_t> Socket::recv(std::span<std::byte> &span) {

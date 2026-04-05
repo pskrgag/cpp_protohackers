@@ -26,7 +26,7 @@ void IOEngine::block_on(Task<> task) {
     std::uint64_t val;
 
     ring_.attachRead(event_.fd(), &val, sizeof(val), nullptr);
-    spawn(task);
+    spawn(std::move(task));
 
     while (active_tasks_.load(std::memory_order_relaxed) > 0) {
         auto cqe = ring_.wait();

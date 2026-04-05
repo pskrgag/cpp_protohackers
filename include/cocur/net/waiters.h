@@ -10,7 +10,6 @@
 #include <cocur/net/socket.h>
 #include <cocur/uring/engine.h>
 #include <errno.h>
-#include <print>
 
 namespace cocur {
 namespace detail {

@@ -10,6 +10,7 @@
 #include <coroutine>
 #include <functional>
 #include <optional>
+#include <utility>
 
 namespace cocur {
 
@@ -60,6 +61,8 @@ public:
 
                 if (h.promise().caller_)
                     h.promise().caller_.resume();
+
+                h.destroy();
             }
 
             void await_resume() noexcept {
@@ -92,6 +95,8 @@ public:
 
                 if (h.promise().caller_)
                     h.promise().caller_.resume();
+
+                h.destroy();
             }
 
             void await_resume() noexcept {
