@@ -81,7 +81,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb")
 include(GNUInstallDirs)
 
 install(TARGETS cocur
-	EXPORT MyLibraryTargets
+	EXPORT CocurTargets
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -92,10 +92,10 @@ install(DIRECTORY include/
 	FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
-install(EXPORT MyLibraryTargets
-	FILE MyLibraryTargets.cmake
-	NAMESPACE MyLibrary::
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MyLibrary
+install(EXPORT CocurTargets
+	FILE CocurTargets.cmake
+	NAMESPACE cocur::
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cocur
 )
 
 # -----------------------------------------------------------------------------
@@ -105,3 +105,8 @@ if(BUILD_TESTS)
 	enable_testing()
 	add_subdirectory(test)
 endif()
+
+# -----------------------------------------------------------------------------
+# Tasks
+# -----------------------------------------------------------------------------
+add_subdirectory(flyio/task0)

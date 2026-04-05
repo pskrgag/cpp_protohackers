@@ -18,6 +18,7 @@ target_link_libraries(tests
 	gtest_main
 	gtest
 )
+
 target_compile_options(tests PRIVATE -ggdb)
 
 add_test(NAME tests COMMAND tests)
