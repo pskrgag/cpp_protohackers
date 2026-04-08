@@ -43,6 +43,21 @@ Task<ssize_t> Socket::recv(std::span<std::byte> &span) {
     co_return read;
 }
 
+Task<std::vector<std::byte>> Socket::recv(void) {
+    std::vector<std::byte> res{};
+    ssize_t read = 0;
+    std::byte buffer[8 << 10];
+
+    do {
+        auto span = std::span(buffer, sizeof(buffer));
+
+        read = co_await detail::Read{*this, span};
+        res.insert(res.end(), span.begin(), span.begin() + read);
+    } while (read == sizeof(buffer));
+
+    co_return res;
+}
+
 Task<ssize_t> Socket::connect(struct sockaddr *addr, size_t size) {
     ssize_t read = co_await detail::Connect{*this, addr, size};
     co_return read;

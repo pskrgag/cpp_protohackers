@@ -110,3 +110,4 @@ endif()
 # Tasks
 # -----------------------------------------------------------------------------
 add_subdirectory(flyio/task0)
+add_subdirectory(flyio/task1)

@@ -10,8 +10,8 @@
 #include <cocur/net/helpers.h>
 #include <cocur/uring/task.h>
 #include <fcntl.h>
-#include <span>
 #include <print>
+#include <span>
 #include <stdexcept>
 #include <unistd.h>
 
@@ -76,6 +76,7 @@ public:
     }
 
     Task<ssize_t> recv(std::span<std::byte> &span);
+    Task<std::vector<std::byte>> recv(void);
     Task<ssize_t> connect(struct sockaddr *addr, size_t size);
 
     template <ByteRange T>
