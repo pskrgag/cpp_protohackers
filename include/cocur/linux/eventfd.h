@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <cocur/linux/fd.h>
 #include <cstdint>
 #include <stdexcept>
 #include <sys/eventfd.h>
@@ -13,7 +14,7 @@
 namespace cocur {
 namespace detail {
 
-class EventFd {
+class EventFd : public Fd {
 public:
     EventFd() {
         fd_ = eventfd(0, 0);
@@ -30,7 +31,7 @@ public:
             throw std::runtime_error{"Failed signal eventfd"};
     }
 
-    int fd() const {
+    virtual int fd() const override {
         return fd_;
     }
 

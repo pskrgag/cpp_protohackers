@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <cocur/net/socket.h>
+#include <cocur/linux/socket.h>
 #include <cocur/scheduler/context.h>
 #include <cocur/scheduler/waiter.h>
 #include <cocur/uring/engine.h>

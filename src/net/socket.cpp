@@ -1,5 +1,5 @@
 #include <cocur/net/tcp.h>
-#include <cocur/net/waiters.h>
+#include <cocur/linux/waiters.h>
 #include <cocur/uring/uring.h>
 #include <format>
 #include <limits>

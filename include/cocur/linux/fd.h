@@ -5,7 +5,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <sys/eventfd.h>
 #include <unistd.h>
+#pragma once
 
-namespace cocur {}; // namespace cocur
+namespace cocur {
+class Fd {
+public:
+    virtual int fd() const = 0;
+};
+
+}; // namespace cocur

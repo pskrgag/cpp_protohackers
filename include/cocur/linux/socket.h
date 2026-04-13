@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cocur/linux/fd.h>
 #include <cocur/net/helpers.h>
 #include <cocur/scheduler/task.h>
 #include <fcntl.h>
@@ -33,7 +34,7 @@ concept ByteRange = std::ranges::contiguous_range<T> && std::ranges::sized_range
 template <typename T>
 concept Pod = std::is_trivial_v<T> && std::is_standard_layout_v<T> && !std::is_array_v<T>;
 
-class Socket {
+class Socket : public Fd {
     int fd_;
 
     Task<ssize_t> sendImpl(std::span<const std::byte> span);
@@ -57,13 +58,13 @@ protected:
     friend class TcpListner;
     friend class IOEngine;
 
-    int fd() const {
-        return fd_;
-    }
-
 public:
     Socket(const Socket &) = delete;
     Socket operator=(const Socket &) = delete;
+
+    virtual int fd() const  override {
+        return fd_;
+    }
 
     Socket() {
         fd_ = socket(PF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);

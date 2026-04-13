@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <cocur/net/socket.h>
+#include <cocur/linux/fd.h>
 #include <liburing.h>
 #include <memory>
-#include <print>
+#include <functional>
 #include <stdexcept>
 
 namespace cocur {
@@ -33,26 +33,25 @@ public:
         io_uring_queue_exit(&ring_);
     }
 
-    void attachAccept(const Socket &socket, void *data) {
+    void attachAccept(const Fd &socket, void *data) {
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_accept(sqe, socket.fd(), nullptr, nullptr, 0);
     }
 
-    void attachConnect(const Socket &socket, const struct sockaddr *addr, size_t size, void *data) {
+    void attachConnect(const Fd &socket, const struct sockaddr *addr, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_connect(sqe, socket.fd(), addr, size);
     }
 
-    void attachWrite(const Socket &socket, const void *buffer, size_t size, void *data) {
+    void attachWrite(const Fd &socket, const void *buffer, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_write(sqe, socket.fd(), buffer, size, 0);
     }
 
-    template <typename T>
-    void attachRead(const T &socket, void *buffer, size_t size, void *data) {
+    void attachRead(const Fd &socket, void *buffer, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_read(sqe, socket.fd(), buffer, size, 0);

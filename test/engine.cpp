@@ -7,7 +7,6 @@ cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::T
     auto span = std::span(buffer, sizeof(buffer));
 
     while (true) {
-	    std::println("1recv");
         auto read = co_await client->recv(span);
         if (read == 0)
             break;
@@ -30,7 +29,6 @@ cocur::Task<> client(cocur::Scheduler<> &engine) {
     auto span = std::span(buffer, sizeof(buffer));
 
     co_await sock.send("hello");
-    std::println("recv");
     auto read = co_await sock.recv(span);
 
     EXPECT_EQ(read, 6);
