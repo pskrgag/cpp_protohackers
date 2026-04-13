@@ -35,11 +35,16 @@ int TcpListner::create_and_listen(const std::string &server_addr) {
 
 Task<std::shared_ptr<TcpClient>> TcpListner::accept() {
     int fd = co_await detail::Accept{*this};
-    co_return std::make_shared<TcpClient>(fd, engine_);
+    co_return std::make_shared<TcpClient>(fd);
 }
 
-Task<ssize_t> Socket::recv(std::span<std::byte> &span) {
+Task<ssize_t> Socket::recvImpl(std::span<std::byte> span) {
     ssize_t read = co_await detail::Read{*this, span};
+    co_return read;
+}
+
+Task<ssize_t> Socket::recvExactImpl(std::span<std::byte> span) {
+    ssize_t read = co_await detail::ReadExact{*this, span};
     co_return read;
 }
 
@@ -68,10 +73,10 @@ Task<ssize_t> Socket::sendImpl(std::span<const std::byte> span) {
     co_return written;
 }
 
-Task<TcpClient> TcpClient::connect(const std::string &server_addr, IOEngine &engine) {
+Task<TcpClient> TcpClient::connect(const std::string &server_addr) {
     auto addr = cocur::string_to_address(server_addr);
 
-    Socket sock = Socket(engine);
+    Socket sock;
 
     struct sockaddr_in in;
     in.sin_family = AF_INET;

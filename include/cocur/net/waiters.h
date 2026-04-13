@@ -8,116 +8,154 @@
 #pragma once
 
 #include <cocur/net/socket.h>
+#include <cocur/scheduler/context.h>
+#include <cocur/scheduler/waiter.h>
 #include <cocur/uring/engine.h>
 #include <errno.h>
 
 namespace cocur {
 namespace detail {
+static bool shouldWait(ssize_t res) {
+    return res == -1 && (errno == EWOULDBLOCK || errno == EINPROGRESS);
+}
 
-template <typename Call = void>
-class AsyncSyscall {
-public:
-    AsyncSyscall() : sleeping_(false) {};
-
-    bool await_ready() const noexcept {
-        // Don't block on the first call
-        return false;
-    }
-
-    bool await_suspend(std::coroutine_handle<> handle) noexcept {
-        int res = static_cast<Call *>(this)->Call();
-
-        if (res == -1 && (errno == EWOULDBLOCK || errno == EINPROGRESS)) {
-            sleeping_ = true;
-            handle_ = handle;
-            static_cast<Call *>(this)->PrepareSleep(handle, this);
-            return true;
-        }
-
-        return_value_ = res;
-        return false;
-    }
-
-    ssize_t await_resume() {
-        return return_value_;
-    }
-
-    void resume(ssize_t result) {
-        return_value_ = result;
-        handle_.resume();
-    }
-
-private:
-    bool sleeping_;
-    ssize_t return_value_;
-    std::coroutine_handle<> handle_ = std::noop_coroutine();
-};
-
-class Accept : public AsyncSyscall<Accept> {
+class Accept : public AsyncSyscall {
 public:
     Accept(const Socket &socket) : socket_(socket) {
     }
 
-    int Call() noexcept {
-        return ::accept(socket_.fd(), nullptr, nullptr);
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        res = ::accept(socket_.fd(), nullptr, nullptr);
+        return shouldWait(res);
     }
 
-    void PrepareSleep(std::coroutine_handle<> handle, AsyncSyscall<Accept> *parent) noexcept {
-        socket_.engine_.attachAccept(socket_, parent);
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        current_context()->engine().ring().attachAccept(socket_, parent);
     }
 
 private:
     const Socket &socket_;
 };
 
-class Read : public AsyncSyscall<Read> {
+class Read : public AsyncSyscall {
 public:
-    Read(const Socket &socket, std::span<std::byte> &span) : socket_(socket), span_(span) {
+    Read(const Socket &socket, std::span<std::byte> span) : socket_(socket), span_(span) {
     }
 
-    int Call() noexcept {
-        return ::read(socket_.fd(), span_.data(), span_.size());
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        res = ::read(socket_.fd(), span_.data(), span_.size());
+        return shouldWait(res);
     }
 
-    void PrepareSleep(std::coroutine_handle<> handle, AsyncSyscall<Read> *parent) noexcept {
-        socket_.engine_.attachRead(socket_, span_.data(), span_.size(), parent);
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        current_context()->engine().ring().attachRead(socket_, span_.data(), span_.size(), parent);
     }
 
-private:
     const Socket &socket_;
-    std::span<std::byte> &span_;
+    std::span<std::byte> span_;
 };
 
-class Write : public AsyncSyscall<Write> {
+class ReadExact : public Read {
 public:
-    Write(const Socket &socket, std::span<const std::byte> span) : socket_(socket), span_(span) {
+    ReadExact(const Socket &socket, std::span<std::byte> span)
+        : Read(socket, span), origSize_(span.size()) {
     }
 
-    int Call() noexcept {
-        return ::write(socket_.fd(), span_.data(), span_.size());
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        res = ::read(socket_.fd(), span_.data(), span_.size());
+        if (res == span_.size()) {
+            return false;
+        } else if (res > 0) {
+            span_ = span_.subspan(res);
+            return true;
+        } else if (res == 0) {
+            res = -1;
+            return false;
+        } else {
+            return shouldWait(res);
+        }
     }
 
-    void PrepareSleep(std::coroutine_handle<> handle, AsyncSyscall<Write> *parent) noexcept {
-        socket_.engine_.attachWrite(socket_, span_.data(), span_.size(), parent);
-    }
+    virtual bool isFinished(ssize_t &res) noexcept override {
+        if (res > 0 && res != span_.size()) {
+            assert(res <= span_.size());
+
+            span_ = span_.subspan(res);
+            prepareSleep(this);
+            return false;
+        }
+
+        res = origSize_;
+        return true;
+    };
 
 private:
+    size_t origSize_;
+};
+
+class Write : public AsyncSyscall {
+public:
+    Write(const Socket &socket, std::span<const std::byte> span)
+        : socket_(socket), span_(span), origSize_(span.size()) {
+    }
+
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        res = ::write(socket_.fd(), span_.data(), span_.size());
+
+        // TODO: debug
+        assert(res == span_.size());
+
+        if (res == span_.size()) {
+            return false;
+        } else if (res > 0) {
+            span_ = span_.subspan(res);
+            return true;
+        } else {
+            return shouldWait(res);
+        }
+    }
+
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        current_context()->engine().ring().attachWrite(socket_, span_.data(), span_.size(), parent);
+    }
+
+    virtual bool isFinished(ssize_t &res) noexcept override {
+        if (res > 0 && res != span_.size()) {
+            assert(res <= span_.size());
+
+            span_ = span_.subspan(res);
+            prepareSleep(this);
+            return false;
+        }
+
+        res = origSize_;
+        return true;
+    };
+
+private:
+    size_t origSize_;
     const Socket &socket_;
     std::span<const std::byte> span_;
 };
 
-class Connect : public AsyncSyscall<Connect> {
+class Connect : public AsyncSyscall {
 public:
     Connect(const Socket &socket, struct sockaddr *addr, size_t size)
         : socket_(socket), addr_(addr), size_(size) {
     }
 
-    int Call() noexcept {
-        return ::connect(socket_.fd(), addr_, size_);
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        res = ::connect(socket_.fd(), addr_, size_);
+        return shouldWait(res);
     }
 
-    void PrepareSleep(std::coroutine_handle<> handle, AsyncSyscall<Connect> *parent) noexcept {
-        socket_.engine_.attachConnect(socket_, addr_, size_, parent);
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        current_context()->engine().ring().attachConnect(socket_, addr_, size_, parent);
     }
 
 private:

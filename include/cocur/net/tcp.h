@@ -8,12 +8,10 @@
 #pragma once
 
 #include <cocur/net/socket.h>
-#include <cocur/uring/task.h>
+#include <cocur/scheduler/task.h>
 #include <memory>
 
 namespace cocur {
-
-class IOEngine;
 
 class TcpClient;
 
@@ -21,7 +19,7 @@ class TcpListner : public Socket {
     static int create_and_listen(const std::string &server_addr);
 
 public:
-    TcpListner(const std::string &to, IOEngine &engine) : Socket(create_and_listen(to), engine) {
+    TcpListner(const std::string &to) : Socket(create_and_listen(to)) {
     }
 
     Task<std::shared_ptr<TcpClient>> accept();
@@ -35,8 +33,8 @@ class TcpClient : public Socket {
     friend class TcpListner;
 
 public:
-    TcpClient(int fd, IOEngine &engine) : Socket(fd, engine) {
+    TcpClient(int fd) : Socket(fd) {
     }
-    static Task<TcpClient> connect(const std::string &to, IOEngine &engine);
+    static Task<TcpClient> connect(const std::string &to);
 };
 } // namespace cocur

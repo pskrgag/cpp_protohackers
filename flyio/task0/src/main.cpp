@@ -1,9 +1,8 @@
 #include <cocur/net/tcp.h>
-#include <cocur/uring/engine.h>
-#include <cocur/uring/task.h>
+#include <cocur/scheduler/scheduler.h>
 #include <string>
 
-cocur::Task<> handle_client(cocur::IOEngine &engine, std::shared_ptr<cocur::TcpClient> client) {
+cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::TcpClient> client) {
     std::byte buffer[1000] = {};
     auto span = std::span(buffer, sizeof(buffer));
 
@@ -16,17 +15,18 @@ cocur::Task<> handle_client(cocur::IOEngine &engine, std::shared_ptr<cocur::TcpC
     }
 }
 
-cocur::Task<> server(cocur::IOEngine &engine) {
-    cocur::TcpListner sock("0.0.0.0:8080", engine);
+cocur::Task<> server(cocur::Scheduler<> &scheduler) {
+    cocur::TcpListner sock("0.0.0.0:8080");
 
     while (1) {
         auto client = co_await sock.accept();
-        engine.spawn(handle_client(engine, client));
+        scheduler.spawn(handle_client(scheduler, client));
     }
 }
 
 int main() {
-    cocur::IOEngine engine;
+    cocur::Scheduler<> scheduler;
 
-    engine.block_on(server(engine));
+    scheduler.spawn(server(scheduler));
+    scheduler.runToTheEnd();
 }

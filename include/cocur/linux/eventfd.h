@@ -6,7 +6,6 @@
  */
 
 #include <cstdint>
-#include <print>
 #include <stdexcept>
 #include <sys/eventfd.h>
 #include <unistd.h>

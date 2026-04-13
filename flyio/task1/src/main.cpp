@@ -1,7 +1,6 @@
 #include <cmath>
 #include <cocur/net/tcp.h>
-#include <cocur/uring/engine.h>
-#include <cocur/uring/task.h>
+#include <cocur/scheduler/scheduler.h>
 #include <format>
 #include <ranges>
 #include <rapidjson/document.h>
@@ -35,7 +34,7 @@ static bool isPrime(double number) {
 }
 
 // {"method":"isPrime","number":123}
-cocur::Task<> handle_client(cocur::IOEngine &engine, std::shared_ptr<cocur::TcpClient> client) {
+cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::TcpClient> client) {
     auto disconnect = false;
     auto is_valid = [](const rapidjson::Document &d) {
         auto is_ok = d.HasMember("method") && d.HasMember("number");
@@ -74,8 +73,8 @@ cocur::Task<> handle_client(cocur::IOEngine &engine, std::shared_ptr<cocur::TcpC
     }
 }
 
-cocur::Task<> server(cocur::IOEngine &engine) {
-    cocur::TcpListner sock("0.0.0.0:8080", engine);
+cocur::Task<> server(cocur::Scheduler<> &engine) {
+    cocur::TcpListner sock("0.0.0.0:8080");
 
     while (1) {
         auto client = co_await sock.accept();
@@ -84,7 +83,8 @@ cocur::Task<> server(cocur::IOEngine &engine) {
 }
 
 int main() {
-    cocur::IOEngine engine;
+    cocur::Scheduler engine;
 
-    engine.block_on(server(engine));
+    engine.spawn(server(engine));
+    engine.runToTheEnd();
 }

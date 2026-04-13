@@ -1,4 +1,4 @@
-#include <cocur/unbounded_spsc.h>
+#include <cocur/containers/unbounded_spsc.h>
 #include <gtest/gtest.h>
 #include <ranges>
 #include <thread>

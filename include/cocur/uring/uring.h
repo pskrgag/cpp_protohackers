@@ -10,13 +10,15 @@
 #include <cocur/net/socket.h>
 #include <liburing.h>
 #include <memory>
+#include <print>
 #include <stdexcept>
 
 namespace cocur {
+
 class IOring {
 public:
-    explicit IOring(size_t ring_size) {
-        auto res = io_uring_queue_init(ring_size, &ring_, IORING_SETUP_SQPOLL);
+    explicit IOring(size_t ring_size) : io_count_(0) {
+        auto res = io_uring_queue_init(ring_size, &ring_, 0);
         if (res < 0) {
             throw std::runtime_error("Failed to initializing io_uring: " + std::to_string(res));
         }
@@ -31,59 +33,72 @@ public:
         io_uring_queue_exit(&ring_);
     }
 
-    void attachAccept(int fd, void *data) {
+    void attachAccept(const Socket &socket, void *data) {
         auto sqe = allocate_sqe(data);
 
-        io_uring_prep_accept(sqe, fd, nullptr, nullptr, 0);
-        io_uring_submit(&ring_);
+        io_uring_prep_accept(sqe, socket.fd(), nullptr, nullptr, 0);
     }
 
-    void attachConnect(int fd, const struct sockaddr *addr, size_t size, void *data) {
+    void attachConnect(const Socket &socket, const struct sockaddr *addr, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 
-        io_uring_prep_connect(sqe, fd, addr, size);
-        io_uring_submit(&ring_);
+        io_uring_prep_connect(sqe, socket.fd(), addr, size);
     }
 
-    void attachWrite(int fd, const void *buffer, size_t size, void *data) {
+    void attachWrite(const Socket &socket, const void *buffer, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 
-        io_uring_prep_write(sqe, fd, buffer, size, 0);
-        io_uring_submit(&ring_);
+        io_uring_prep_write(sqe, socket.fd(), buffer, size, 0);
     }
 
-    void attachRead(int fd, void *buffer, size_t size, void *data) {
+    template <typename T>
+    void attachRead(const T &socket, void *buffer, size_t size, void *data) {
         auto sqe = allocate_sqe(data);
 
-        io_uring_prep_read(sqe, fd, buffer, size, 0);
-        io_uring_submit(&ring_);
+        io_uring_prep_read(sqe, socket.fd(), buffer, size, 0);
     }
 
-    struct io_uring_cqe wait(void) {
-        struct io_uring_cqe *cqes;
-        int res = io_uring_wait_cqes(&ring_, &cqes, 1, nullptr, nullptr);
-        if (res < 0) {
-            throw std::runtime_error("Failed to wait" + std::to_string(res));
+    void wait(std::function<void(struct io_uring_cqe *)> cb) {
+        struct io_uring_cqe *cqes[32] = {}, *cqe;
+        unsigned head;
+        int count;
+
+        if (io_count_ == 0)
+            return;
+
+        do {
+            int res = io_uring_submit_and_wait(&ring_, 1);
+            if (res < 0 && !(res == -EINTR || res == -ETIME)) {
+                throw std::runtime_error("Failed to wait " + std::to_string(count));
+            }
+
+            count = io_uring_peek_batch_cqe(&ring_, cqes, 32);
+            if (count > 0)
+                break;
+        } while (true);
+
+        for (auto i = 0; i < count; ++i) {
+            cb(cqes[i]);
+            io_count_--;
         }
 
-        auto copy = *cqes;
-        io_uring_cqe_seen(&ring_, cqes);
-        return copy;
+        io_uring_cq_advance(&ring_, count);
     }
 
 private:
-    template <typename T>
-    struct io_uring_sqe *allocate_sqe(T *data) {
+    struct io_uring_sqe *allocate_sqe(void *data) {
         struct io_uring_sqe *sqe = io_uring_get_sqe(&ring_);
 
         if (!sqe)
             throw std::runtime_error("Out of entries");
 
+        io_count_++;
         io_uring_sqe_set_data(sqe, (void *)data);
         return sqe;
     }
 
     struct io_uring ring_;
+    unsigned io_count_;
     std::unique_ptr<struct io_uring_cqe[]> cqes_;
 };
 

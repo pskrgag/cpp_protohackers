@@ -113,16 +113,25 @@ public:
 
 template <typename T = void>
 class Task {
-    std::coroutine_handle<detail::Promise<T>> handle_ = std::noop_coroutine;
+    std::coroutine_handle<detail::Promise<T>> handle_ = nullptr;
 
     friend class detail::Promise<T>;
-    friend class IOEngine;
 
     Task(std::coroutine_handle<detail::Promise<T>> handle) : handle_(handle) {
     }
 
 public:
+    Task(const Task &) = delete;
+    Task operator=(const Task &) = delete;
+
+    Task(Task &&other) : handle_(std::exchange(other.handle_, {})) {
+    }
+
     using promise_type = detail::Promise<T>;
+
+    void reset() {
+        handle_ = nullptr;
+    }
 
     bool await_ready() {
         // Pass to the waiter
@@ -144,8 +153,13 @@ public:
         handle_.resume();
     }
 
-    std::coroutine_handle<detail::Promise<T>> &handle() {
-        return handle_;
+    std::coroutine_handle<detail::Promise<T>> takeOwnership() {
+        return std::exchange(handle_, nullptr);
+    }
+
+    ~Task() {
+        // if (handle_)
+        //     handle_.destroy();
     }
 };
 

@@ -35,7 +35,6 @@ pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing>=2.0)
 add_library(cocur
 	STATIC
 	src/net/socket.cpp
-	src/uring/engine.cpp
 )
 
 # Public headers
@@ -111,3 +110,4 @@ endif()
 # -----------------------------------------------------------------------------
 add_subdirectory(flyio/task0)
 add_subdirectory(flyio/task1)
+add_subdirectory(flyio/task2)
