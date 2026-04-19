@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#pragma once
 #include <atomic>
 #include <cocur/scheduler/context.h>
 #include <cocur/scheduler/policy/policy.h>

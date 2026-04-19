@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Pavel Skripkin
  * SPDX-License-Identifier: MIT
  */
-
+#pragma once
 #include <cocur/scheduler/thread_info.h>
 #include <cocur/uring/engine.h>
 #include <thread>

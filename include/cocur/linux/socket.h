@@ -62,7 +62,7 @@ public:
     Socket(const Socket &) = delete;
     Socket operator=(const Socket &) = delete;
 
-    virtual int fd() const  override {
+    virtual int fd() const override {
         return fd_;
     }
 
