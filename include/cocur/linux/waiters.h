@@ -57,10 +57,69 @@ protected:
     std::span<std::byte> span_;
 };
 
+class Recv : public AsyncSyscall {
+public:
+    Recv(const Socket &socket, std::span<std::byte> span, struct sockaddr_in *addr = nullptr)
+        : socket_(socket), span_(span), addr_(addr) {
+    }
+
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        socklen_t len = sizeof(struct sockaddr_in);
+
+        res =
+            ::recvfrom(socket_.fd(), span_.data(), span_.size(), 0, (struct sockaddr *)addr_, &len);
+        return shouldWait(res);
+    }
+
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        iovec_.iov_base = span_.data();
+        iovec_.iov_len = span_.size();
+        hdr_.msg_iovlen = 1;
+
+        hdr_.msg_iov = &iovec_;
+        hdr_.msg_name = addr_;
+        hdr_.msg_namelen = sizeof(*addr_);
+
+        current_context()->engine().ring().attachRecv(socket_, &hdr_, parent);
+    }
+
+    struct sockaddr_in *addr_;
+    const Socket &socket_;
+    struct msghdr hdr_;
+    struct iovec iovec_;
+    std::span<std::byte> span_;
+};
+
+class Send : public AsyncSyscall {
+public:
+    Send(const Socket &socket, std::span<const std::byte> span,
+         const struct sockaddr_in *addr)
+        : socket_(socket), span_(span), addr_(addr) {
+    }
+
+protected:
+    virtual bool call(ssize_t &res) noexcept override {
+        res = ::sendto(socket_.fd(), span_.data(), span_.size(), 0, (struct sockaddr *)addr_,
+                       sizeof(*addr_));
+        return shouldWait(res);
+    }
+
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        current_context()->engine().ring().attachSend(socket_, span_.data(), span_.size(),
+                                                      (struct sockaddr *)addr_, sizeof(sockaddr_in),
+                                                      parent);
+    }
+
+    const struct sockaddr_in *addr_;
+    const Socket &socket_;
+    std::span<const std::byte> span_;
+};
+
 class ReadExact : public Read {
 public:
-    ReadExact(const Socket &socket, std::span<std::byte> span)
-        : Read(socket, span), origSize_(span.size()) {
+    ReadExact(const Socket &socket, std::span<std::byte> span, bool retry = false)
+        : Read(socket, span), origSize_(span.size()), retry_(retry) {
     }
 
 protected:
@@ -68,7 +127,7 @@ protected:
         res = ::read(socket_.fd(), span_.data(), span_.size());
         if (res == span_.size()) {
             return false;
-        } else if (res > 0) {
+        } else if (res > 0 && retry_) {
             span_ = span_.subspan(res);
             return true;
         } else if (res == 0) {
@@ -93,6 +152,7 @@ protected:
     };
 
 private:
+    bool retry_;
     size_t origSize_;
 };
 

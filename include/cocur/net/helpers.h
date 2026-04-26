@@ -8,48 +8,34 @@
 #pragma once
 
 #include <arpa/inet.h>
-#include <cstdint>
-#include <cstdlib>
+#include <cocur/net/endpoint.h>
+#include <format>
 #include <limits>
-#include <stdexcept>
 
 namespace cocur {
 
-struct Address {
-    struct in_addr address;
-    std::uint16_t port; // in BE
-};
+static int create_listner(std::string_view address, int proto) {
+    auto addr = Endpoint(address);
 
-/// a.b.c.d:n
-static inline Address string_to_address(const std::string &address) {
-    char *endp;
-    const char *start = address.data();
-    std::uint32_t addr = 0;
+    int fd_ = socket(PF_INET, proto | SOCK_NONBLOCK, 0);
+    if (fd_ < 0)
+        throw std::runtime_error("Failed to create a socket");
 
-    for (int i = 0; i < 4; ++i) {
-        if (start >= address.data() + address.size())
-            throw std::runtime_error("wrong string");
+    int enable = 1;
+    if (setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+        throw std::runtime_error("setsockopt(SO_REUSEADDR) failed");
 
-        unsigned long part = strtoul(start, &endp, 10);
+    int res = bind(fd_, (struct sockaddr *)addr.addr(), addr.addrlen());
+    if (res < 0)
+        throw std::runtime_error(std::format("Failed to bind socket {}", errno));
 
-        if (part == std::numeric_limits<unsigned long>::max() || endp == start)
-            throw std::runtime_error("wrong string");
-
-        if (part > 255)
-            throw std::runtime_error("wrong string address part");
-
-        addr |= (part << (i * 8));
-        start = endp + 1;
+    if (proto == SOCK_STREAM) {
+        res = listen(fd_, std::numeric_limits<int>::max());
+        if (res < 0)
+            throw std::runtime_error(std::format("Failed to listen to socket {}", errno));
     }
 
-    unsigned long port = strtoul(start, &endp, 10);
-    if (port == std::numeric_limits<unsigned long>::max() || endp == start)
-        throw std::runtime_error("wrong string");
-
-    if (port > (unsigned long)std::numeric_limits<std::uint16_t>::max())
-        throw std::runtime_error("wrong port");
-
-    return {{addr}, htons((std::uint16_t)port)};
+    return fd_;
 }
 
 } // namespace cocur

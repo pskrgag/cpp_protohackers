@@ -46,7 +46,7 @@ cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::T
 
     while (true) {
         rapidjson::Document d;
-        auto json = co_await client->recv();
+        auto json = co_await client->readToTheEnd();
         if (json.size() == 0)
             break;
 

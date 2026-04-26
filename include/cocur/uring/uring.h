@@ -8,9 +8,9 @@
 #pragma once
 
 #include <cocur/linux/fd.h>
+#include <functional>
 #include <liburing.h>
 #include <memory>
-#include <functional>
 #include <stdexcept>
 
 namespace cocur {
@@ -55,6 +55,19 @@ public:
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_read(sqe, socket.fd(), buffer, size, 0);
+    }
+
+    void attachRecv(const Fd &socket, struct msghdr *hdr, void *data) {
+        auto sqe = allocate_sqe(data);
+
+        io_uring_prep_recvmsg(sqe, socket.fd(), hdr, 0);
+    }
+
+    void attachSend(const Fd &socket, const void *buffer, size_t size, struct sockaddr *addr,
+                    size_t addrSize, void *data) {
+        auto sqe = allocate_sqe(data);
+
+        io_uring_prep_sendto(sqe, socket.fd(), buffer, size, 0, addr, addrSize);
     }
 
     void wait(std::function<void(struct io_uring_cqe *)> cb) {
