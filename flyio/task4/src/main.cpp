@@ -1,9 +1,12 @@
 #include <cocur/net/udp.h>
 #include <cocur/scheduler/scheduler.h>
+#include <cstdlib>
+#include <format>
 #include <mutex>
 #include <optional>
 #include <print>
 #include <span>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 
@@ -32,6 +35,20 @@ private:
 
 static Db Db;
 
+static std::string bind_address() {
+    if (const char *address = std::getenv("BIND_ADDRESS"); address != nullptr)
+        return address;
+
+    const char *port = std::getenv("PORT");
+    if (port == nullptr)
+        port = "8080";
+
+    if (std::getenv("FLY_APP_NAME") != nullptr)
+        return std::format("fly-global-services:{}", port);
+
+    return std::format("0.0.0.0:{}", port);
+}
+
 cocur::Task<> handle_client(std::vector<std::byte> data, cocur::UdpListner &server,
                             cocur::Endpoint ep) {
     auto eq = std::ranges::find(data, std::byte{'='});
@@ -53,26 +70,30 @@ cocur::Task<> handle_client(std::vector<std::byte> data, cocur::UdpListner &serv
         }
 
         auto value = Db.get(key);
+        std::string response;
 
         if (value) {
-            co_await server.sendTo(std::format("{}={}", key, *value), ep);
+            response = std::format("{}={}", key, *value);
         } else {
-            co_await server.sendTo(std::format("{}=", key), ep);
+            response = std::format("{}=", key);
         }
+
+        co_await server.sendTo(response, ep);
     }
 
     co_return;
 }
 
 cocur::Task<> server(cocur::Scheduler<> &engine) {
-    cocur::UdpListner sock("0.0.0.0:8080");
+    cocur::UdpListner sock(bind_address());
 
     while (1) {
         std::byte buffer[1000];
         cocur::Endpoint from;
 
         auto size = co_await sock.recvFrom(buffer, from);
-        engine.spawn(handle_client(std::vector(buffer, buffer + size), sock, from));
+        if (size >= 0)
+            engine.spawn(handle_client(std::vector(buffer, buffer + size), sock, from));
     }
 }
 

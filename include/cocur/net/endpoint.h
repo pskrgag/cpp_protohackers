@@ -11,7 +11,10 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <netdb.h>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <sys/socket.h>
 
 namespace cocur {
@@ -20,40 +23,34 @@ class Endpoint {
 public:
     Endpoint() : addr_() {};
 
-    /// a.b.c.d:n
+    /// host:n
     Endpoint(std::string_view address) {
-        char *endp;
-        const char *start = address.data();
-        std::uint32_t addr = 0;
+        auto colon = address.rfind(':');
+        if (colon == std::string_view::npos || colon == address.size() - 1)
+            throw std::runtime_error(std::format("wrong endpoint string: {}", address));
 
-        for (int i = 0; i < 4; ++i) {
-            if (start >= address.data() + address.size())
-                throw std::runtime_error("wrong string");
+        std::string host(address.substr(0, colon));
+        std::string port(address.substr(colon + 1));
 
-            unsigned long part = strtoul(start, &endp, 10);
+        addrinfo hints{};
+        hints.ai_family = AF_INET;
+        hints.ai_flags = host.empty() ? AI_PASSIVE : 0;
 
-            if (part == std::numeric_limits<unsigned long>::max() || endp == start)
-                throw std::runtime_error("wrong string");
+        addrinfo *result = nullptr;
+        int ret = ::getaddrinfo(host.empty() ? nullptr : host.c_str(), port.c_str(), &hints,
+                                &result);
+        if (ret != 0)
+            throw std::runtime_error(std::format("failed to resolve endpoint {}: {}", address,
+                                                 ::gai_strerror(ret)));
 
-            if (part > 255)
-                throw std::runtime_error("wrong string address part");
-
-            addr |= (part << (i * 8));
-            start = endp + 1;
+        if (result == nullptr || result->ai_addrlen != sizeof(addr_)) {
+            if (result != nullptr)
+                ::freeaddrinfo(result);
+            throw std::runtime_error(std::format("failed to resolve IPv4 endpoint {}", address));
         }
 
-        unsigned long port = strtoul(start, &endp, 10);
-        if (port == std::numeric_limits<unsigned long>::max() || endp == start)
-            throw std::runtime_error("wrong string");
-
-        if (port > (unsigned long)std::numeric_limits<std::uint16_t>::max())
-            throw std::runtime_error("wrong port");
-
-        addr_.sin_port = ::htons((uint16_t)port);
-        addr_.sin_family = AF_INET;
-
-        static_assert(sizeof(addr_.sin_addr) == sizeof(addr));
-        ::memcpy(&addr_.sin_addr, &addr, sizeof(addr));
+        std::memcpy(&addr_, result->ai_addr, sizeof(addr_));
+        ::freeaddrinfo(result);
     }
 
     struct sockaddr_in *addr() {
@@ -69,7 +66,7 @@ public:
     }
 
     uint16_t port() const {
-        return __builtin_bswap32(addr_.sin_port);
+        return ::ntohs(addr_.sin_port);
     }
 
 private:
