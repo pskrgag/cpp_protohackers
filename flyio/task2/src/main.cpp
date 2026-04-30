@@ -12,12 +12,12 @@ static_assert(std::endian::native == std::endian::little,
               "This code requires a little-endian architecture");
 static_assert(sizeof(Message) == 9, "Check size");
 
-cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::TcpClient> client) {
+cocur::Task<> handle_client(cocur::Scheduler<> &engine, cocur::TcpClient client) {
     std::map<int32_t, int32_t> map;
 
     while (true) {
         Message msg;
-        auto res = co_await client->recv(msg);
+        auto res = co_await client.recv(msg);
         if (res <= 0)
             break;
 
@@ -46,7 +46,7 @@ cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::T
                 sum /= count;
             }
 
-            co_await client->send(__builtin_bswap32((int32_t)sum));
+            co_await client.send(__builtin_bswap32((int32_t)sum));
             break;
         }
         default:
@@ -61,7 +61,7 @@ cocur::Task<> server(cocur::Scheduler<> &engine) {
 
     while (1) {
         auto client = co_await sock.accept();
-        engine.spawn(handle_client(engine, client));
+        engine.spawn(handle_client(engine, std::move(client)));
     }
 }
 

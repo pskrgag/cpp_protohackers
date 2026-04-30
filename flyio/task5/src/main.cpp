@@ -125,7 +125,7 @@ cocur::Task<> server(cocur::Scheduler<> &engine) {
     while (1) {
         auto client = co_await sock.accept();
 
-        engine.spawn(handle_client(engine, client));
+        engine.spawn(handle_client(engine, std::make_shared<cocur::TcpClient>(std::move(client))));
     }
 }
 

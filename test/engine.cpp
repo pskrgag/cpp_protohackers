@@ -6,16 +6,16 @@
 
 using namespace std::chrono_literals;
 
-cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::TcpClient> client) {
+cocur::Task<> handle_client(cocur::Scheduler<> &engine, cocur::TcpClient client) {
     std::byte buffer[1000] = {};
     auto span = std::span(buffer, sizeof(buffer));
 
     while (true) {
-        auto read = co_await client->recv(span);
+        auto read = co_await client.recv(span);
         if (read == 0)
             break;
 
-        co_await client->send(std::span(buffer, read));
+        co_await client.send(std::span(buffer, read));
     }
 }
 
@@ -23,7 +23,7 @@ cocur::Task<> server(cocur::Scheduler<> &engine) {
     cocur::TcpListner sock("0.0.0.0:9998");
 
     auto client = co_await sock.accept();
-    co_await handle_client(engine, client);
+    co_await handle_client(engine, std::move(client));
 }
 
 cocur::Task<> client(cocur::Scheduler<> &engine) {

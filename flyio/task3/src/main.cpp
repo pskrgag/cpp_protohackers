@@ -39,7 +39,8 @@ cocur::Task<> server(cocur::Scheduler<> &engine) {
 
     while (1) {
         auto client = co_await sock.accept();
-        engine.spawn(handle_client(engine, std::make_shared<ClientSocket>(client), room));
+        engine.spawn(
+            handle_client(engine, std::make_shared<ClientSocket>(std::move(client)), room));
     }
 }
 

@@ -12,7 +12,7 @@
 
 class ClientSocket {
 public:
-    ClientSocket(std::shared_ptr<cocur::TcpClient> client) : client_(client), messages_{} {
+    ClientSocket(cocur::TcpClient client) : client_(std::move(client)), messages_{} {
     }
 
     cocur::Task<std::optional<std::string>> getMessage() {
@@ -21,7 +21,7 @@ public:
 
         if (messages_.size() == 0) {
             do {
-                auto res = co_await client_->recv(buffer);
+                auto res = co_await client_.recv(buffer);
                 if (res == 0) {
                     co_return {};
                 }
@@ -54,11 +54,11 @@ public:
     }
 
     cocur::Task<ssize_t> send(std::string_view data) {
-        co_return co_await client_->send(data);
+        co_return co_await client_.send(data);
     }
 
 private:
-    std::shared_ptr<cocur::TcpClient> client_;
+    cocur::TcpClient client_;
     std::deque<std::string> messages_;
 };
 class ChatRoom;

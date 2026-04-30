@@ -34,7 +34,7 @@ static bool isPrime(double number) {
 }
 
 // {"method":"isPrime","number":123}
-cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::TcpClient> client) {
+cocur::Task<> handle_client(cocur::Scheduler<> &engine, cocur::TcpClient client) {
     auto disconnect = false;
     auto is_valid = [](const rapidjson::Document &d) {
         auto is_ok = d.HasMember("method") && d.HasMember("number");
@@ -46,7 +46,7 @@ cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::T
 
     while (true) {
         rapidjson::Document d;
-        auto json = co_await client->readToTheEnd();
+        auto json = co_await client.readToTheEnd();
         if (json.size() == 0)
             break;
 
@@ -60,14 +60,14 @@ cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::T
                 continue;
 
             if (d.HasParseError() || !d.IsObject() || !is_valid(d)) {
-                co_await client->send(malformed);
+                co_await client.send(malformed);
                 break;
             } else {
                 auto number = d["number"].Get<double>();
                 auto res = std::format("{{\"method\":\"isPrime\",\"prime\":{}}}\n",
                                        isPrime(number) ? "true" : "false");
 
-                co_await client->send(res);
+                co_await client.send(res);
             }
         }
     }
@@ -78,7 +78,7 @@ cocur::Task<> server(cocur::Scheduler<> &engine) {
 
     while (1) {
         auto client = co_await sock.accept();
-        engine.spawn(handle_client(engine, client));
+        engine.spawn(handle_client(engine, std::move(client)));
     }
 }
 

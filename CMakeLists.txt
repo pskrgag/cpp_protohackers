@@ -109,9 +109,9 @@ endif()
 # -----------------------------------------------------------------------------
 # Tasks
 # -----------------------------------------------------------------------------
-# add_subdirectory(flyio/task0)
-# add_subdirectory(flyio/task1)
-# add_subdirectory(flyio/task2)
-# add_subdirectory(flyio/task3)
-# add_subdirectory(flyio/task4)
+add_subdirectory(flyio/task0)
+add_subdirectory(flyio/task1)
+add_subdirectory(flyio/task2)
+add_subdirectory(flyio/task3)
+add_subdirectory(flyio/task4)
 add_subdirectory(flyio/task5)

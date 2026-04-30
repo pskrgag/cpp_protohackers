@@ -55,9 +55,9 @@ public:
     TcpListner(const std::string &to) : TcpSocket(create_listner(to, SOCK_STREAM)) {
     }
 
-    Task<std::shared_ptr<TcpClient>> accept() {
+    Task<TcpClient> accept() {
         int fd = co_await detail::Accept{*this};
-        co_return std::shared_ptr<TcpClient>(new TcpClient(fd));
+        co_return TcpClient(fd);
     }
 };
 } // namespace cocur
