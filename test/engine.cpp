@@ -1,3 +1,4 @@
+#include <cocur/fs/file.h>
 #include <cocur/net/tcp.h>
 #include <cocur/scheduler/scheduler.h>
 #include <gtest/gtest.h>
@@ -41,4 +42,36 @@ TEST(Engine, SimpleSocket) {
     engine.spawn(server(engine));
     engine.spawn(client(engine));
     engine.runToTheEnd();
+}
+
+cocur::Task<> block() {
+    cocur::TcpListner sock("0.0.0.0:9998");
+
+    auto client = co_await sock.accept();
+}
+
+cocur::Task<> block1() {
+    co_await block();
+}
+
+TEST(Engine, Cancel) {
+    {
+        cocur::Scheduler engine;
+
+        auto handle = engine.spawn(block());
+        handle.cancel();
+        engine.runToTheEnd();
+    }
+
+    {
+        cocur::Scheduler engine;
+
+        auto handle = engine.spawn(block1());
+
+        // ... =)
+        sleep(1);
+
+        handle.cancel();
+        engine.runToTheEnd();
+    }
 }

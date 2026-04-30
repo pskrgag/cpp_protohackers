@@ -7,11 +7,13 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cocur/linux/eventfd.h>
 #include <cocur/scheduler/task.h>
 #include <cocur/scheduler/waiter.h>
 #include <cocur/uring/uring.h>
 #include <deque>
+#include <mutex>
 
 namespace cocur {
 
@@ -34,6 +36,9 @@ public:
                 if (task) {
                     pending_jobs_.push_back(*task);
                 }
+            } else {
+                // reattach signal
+                ring_.attachRead(event_, &event_buffer_, sizeof(event_buffer_), nullptr);
             }
         });
     }
@@ -48,6 +53,39 @@ public:
 
     bool hasJobs() const {
         return pending_jobs_.size() > 0;
+    }
+
+    void requestCancel(std::shared_ptr<detail::TaskState> state) {
+        {
+            std::scoped_lock lock(cancel_requests_lock_);
+            cancel_requests_.push_back(std::move(state));
+        }
+
+        signal();
+    }
+
+    void processCancelRequests() {
+        std::deque<std::shared_ptr<detail::TaskState>> requests;
+
+        {
+            std::scoped_lock lock(cancel_requests_lock_);
+            requests.swap(cancel_requests_);
+        }
+
+        for (auto &state : requests) {
+            if (state->completed_.load(std::memory_order_relaxed))
+                continue;
+
+            auto *active_call = state->active_call.load(std::memory_order_acquire);
+            if (active_call) {
+                ring_.cancel(active_call);
+                continue;
+            }
+
+            if (state->coroutine_ && cancelTask(state->coroutine_)) {
+                state->completeOnce();
+            }
+        }
     }
 
     void executeOne() {
@@ -68,10 +106,23 @@ public:
     }
 
 private:
+    bool cancelTask(std::coroutine_handle<> handle) {
+        auto it = std::ranges::find(pending_jobs_, handle);
+
+        if (it == pending_jobs_.end())
+            return false;
+
+        pending_jobs_.erase(it);
+        handle.destroy();
+        return true;
+    }
+
     std::uint64_t event_buffer_;
     detail::EventFd event_;
     IOring ring_;
     std::deque<std::coroutine_handle<>> pending_jobs_;
+    std::mutex cancel_requests_lock_;
+    std::deque<std::shared_ptr<detail::TaskState>> cancel_requests_;
 };
 
 } // namespace cocur

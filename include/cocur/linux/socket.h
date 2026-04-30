@@ -13,6 +13,7 @@
 #include <cocur/scheduler/task.h>
 #include <fcntl.h>
 #include <stdexcept>
+#include <stop_token>
 #include <unistd.h>
 
 namespace cocur {
@@ -102,7 +103,7 @@ public:
     }
 
     template <ByteRange T>
-    Task<ssize_t> recv(T &span) {
+    Task<ssize_t> recv(T &span, std::stop_token cancel = {}) {
         auto *ptr = reinterpret_cast<std::byte *>(std::ranges::data(span));
         const size_t len = std::ranges::size(span);
 

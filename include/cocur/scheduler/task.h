@@ -7,8 +7,9 @@
 
 #pragma once
 #include <cassert>
+#include <cocur/scheduler/task_handle.h>
+#include <cocur/scheduler/thread_info.h>
 #include <coroutine>
-#include <functional>
 #include <optional>
 #include <utility>
 
@@ -26,16 +27,28 @@ namespace detail {
 template <typename T = void>
 struct PromiseBase {
     std::coroutine_handle<> caller_;
-    std::function<void(void)> on_complete_;
+    std::shared_ptr<detail::TaskState> state_;
 
     Task<T> get_return_object();
 
     std::suspend_always initial_suspend() {
+        // co_await'ed tasks may not have state, since we don't expose them to users
+        if (!state_) {
+            auto state = std::make_shared<detail::TaskState>();
+            state_ = state;
+        }
+
+        state_->context_ = detail::tinfo.context_;
         return std::suspend_always{};
     }
 
     void unhandled_exception() {
-        std::terminate();
+        try {
+            throw;
+        } catch (const detail::TaskCanceled &) {
+        } catch (...) {
+            std::terminate();
+        }
     }
 };
 
@@ -55,12 +68,12 @@ public:
             }
 
             void await_suspend(std::coroutine_handle<Promise<T>> h) noexcept {
-                if (h.promise().on_complete_) {
-                    h.promise().on_complete_();
-                }
+                h.promise().state_->completeOnce();
 
-                if (h.promise().caller_)
+                if (h.promise().caller_) {
+                    h.promise().state_->detachFromParent();
                     h.promise().caller_.resume();
+                }
 
                 h.destroy();
             }
@@ -89,12 +102,12 @@ public:
             }
 
             void await_suspend(std::coroutine_handle<Promise<void>> h) noexcept {
-                if (h.promise().on_complete_) {
-                    h.promise().on_complete_();
-                }
+                h.promise().state_->completeOnce();
 
-                if (h.promise().caller_)
+                if (h.promise().caller_) {
+                    h.promise().state_->detachFromParent();
                     h.promise().caller_.resume();
+                }
 
                 h.destroy();
             }
@@ -139,12 +152,19 @@ public:
     }
 
     T await_resume() {
+        if (handle_.promise().state_->canceled_)
+            throw detail::TaskCanceled{};
+
         if constexpr (!std::same_as<T, void>) {
             return std::move(*handle_.promise().result_);
         }
     }
 
-    std::coroutine_handle<> await_suspend(std::coroutine_handle<> caller) {
+    template <typename Promise>
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> caller) {
+        handle_.promise().state_->parent_ = caller.promise().state_;
+        caller.promise().state_->child_.store(handle_.promise().state_, std::memory_order_release);
+
         handle_.promise().caller_ = caller;
         return handle_;
     }

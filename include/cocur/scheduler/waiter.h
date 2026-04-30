@@ -6,9 +6,12 @@
  */
 #pragma once
 
+#include <cassert>
+#include <cocur/scheduler/task_handle.h>
 #include <coroutine>
-#include <sys/types.h>
 #include <optional>
+#include <print>
+#include <sys/types.h>
 
 namespace cocur::detail {
 
@@ -21,13 +24,17 @@ public:
         return false;
     }
 
-    bool await_suspend(std::coroutine_handle<> handle) noexcept {
+    template <typename Promise>
+    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept {
+        state_ = handle.promise().state_;
+
         ssize_t res;
         bool sleep = call(res);
 
         if (sleep) {
             handle_ = handle;
             prepareSleep(this);
+            state_->active_call.store(static_cast<void *>(this), std::memory_order_relaxed);
             return true;
         }
 
@@ -36,6 +43,13 @@ public:
     }
 
     ssize_t await_resume() {
+        if (state_) {
+            state_->active_call.store(nullptr, std::memory_order_release);
+
+            if (state_->canceled_)
+                throw TaskCanceled{};
+        }
+
         return return_value_;
     }
 
@@ -64,5 +78,6 @@ protected:
 private:
     ssize_t return_value_;
     std::coroutine_handle<> handle_ = std::noop_coroutine();
+    std::shared_ptr<TaskState> state_;
 };
 }; // namespace cocur::detail

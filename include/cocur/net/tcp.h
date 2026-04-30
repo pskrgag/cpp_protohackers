@@ -44,7 +44,7 @@ public:
 
         int res = co_await sock.connect((struct sockaddr *)addr.addr(), addr.addrlen());
         if (res < 0)
-            throw std::runtime_error("Failed to connect " + std::to_string(errno));
+            throw std::runtime_error("Failed to connect " + std::to_string(res));
 
         co_return TcpClient(std::move(sock));
     }

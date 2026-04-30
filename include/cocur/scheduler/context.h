@@ -58,10 +58,14 @@ private:
         detail::tinfo.context_ = this;
 
         while (!should_stop()) {
+            engine_.processCancelRequests();
+
             while (engine_.hasJobs()) {
+                engine_.processCancelRequests();
                 engine_.executeOne();
             }
 
+            engine_.processCancelRequests();
             engine_.waitIo();
         }
 

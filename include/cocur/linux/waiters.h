@@ -40,20 +40,20 @@ private:
 
 class Read : public AsyncSyscall {
 public:
-    Read(const Socket &socket, std::span<std::byte> span) : socket_(socket), span_(span) {
+    Read(const Fd &file, std::span<std::byte> span) : file_(file), span_(span) {
     }
 
 protected:
     virtual bool call(ssize_t &res) noexcept override {
-        res = ::read(socket_.fd(), span_.data(), span_.size());
+        res = ::read(file_.fd(), span_.data(), span_.size());
         return shouldWait(res);
     }
 
     virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
-        current_context()->engine().ring().attachRead(socket_, span_.data(), span_.size(), parent);
+        current_context()->engine().ring().attachRead(file_, span_.data(), span_.size(), parent);
     }
 
-    const Socket &socket_;
+    const Fd &file_;
     std::span<std::byte> span_;
 };
 
@@ -93,8 +93,7 @@ protected:
 
 class Send : public AsyncSyscall {
 public:
-    Send(const Socket &socket, std::span<const std::byte> span,
-         const struct sockaddr_in *addr)
+    Send(const Socket &socket, std::span<const std::byte> span, const struct sockaddr_in *addr)
         : socket_(socket), span_(span), addr_(addr) {
     }
 
@@ -124,7 +123,7 @@ public:
 
 protected:
     virtual bool call(ssize_t &res) noexcept override {
-        res = ::read(socket_.fd(), span_.data(), span_.size());
+        res = ::read(file_.fd(), span_.data(), span_.size());
         if (res == span_.size()) {
             return false;
         } else if (res > 0 && retry_) {
@@ -210,8 +209,7 @@ public:
 
 protected:
     virtual bool call(ssize_t &res) noexcept override {
-        res = ::connect(socket_.fd(), addr_, size_);
-        return shouldWait(res);
+        return true;
     }
 
     virtual void prepareSleep(AsyncSyscall *parent) noexcept override {

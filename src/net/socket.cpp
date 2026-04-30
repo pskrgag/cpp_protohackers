@@ -5,8 +5,8 @@
 using namespace cocur;
 
 Task<ssize_t> ClientSocket::connect(struct sockaddr *addr, size_t size) {
-    ssize_t read = co_await detail::Connect{*this, addr, size};
-    co_return read;
+    ssize_t fd = co_await detail::Connect{*this, addr, size};
+    co_return fd;
 }
 
 Task<ssize_t> ClientSocket::recvImpl(std::span<std::byte> span) {

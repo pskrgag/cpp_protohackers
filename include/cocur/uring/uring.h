@@ -9,6 +9,7 @@
 
 #include <cocur/linux/fd.h>
 #include <functional>
+#include <print>
 #include <liburing.h>
 #include <memory>
 #include <stdexcept>
@@ -68,6 +69,13 @@ public:
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_sendto(sqe, socket.fd(), buffer, size, 0, addr, addrSize);
+    }
+
+    void cancel(void *data) {
+        auto sqe = allocate_sqe(nullptr);
+
+        io_uring_prep_cancel(sqe, data, 0);
+        io_uring_submit(&ring_);
     }
 
     void wait(std::function<void(struct io_uring_cqe *)> cb) {

@@ -8,6 +8,8 @@
 #include <atomic>
 #include <cocur/scheduler/context.h>
 #include <cocur/scheduler/policy/policy.h>
+#include <cocur/scheduler/task_handle.h>
+#include <print>
 
 namespace cocur {
 
@@ -22,11 +24,16 @@ public:
         policy_.init(numContexts());
     }
 
-    void spawn(Task<> &&task) {
+    template <typename T>
+    TaskHandle spawn(Task<T> &&task) {
         auto ctx = policy_.pickContext();
         auto task_handle = task.takeOwnership();
+        auto state = std::make_shared<detail::TaskState>();
 
-        task_handle.promise().on_complete_ = [&]() {
+        state->context_ = &contexts_[ctx];
+        state->coroutine_ = task_handle;
+        task_handle.promise().state_ = state;
+        state->on_complete_ = [&]() {
             auto left = active_tasks_.fetch_sub(1, std::memory_order_relaxed);
             if (left == 1) {
                 active_tasks_.notify_one();
@@ -35,11 +42,15 @@ public:
 
         active_tasks_.fetch_add(1, std::memory_order_relaxed);
         contexts_[ctx].spawn(task_handle);
+
+        return TaskHandle(state);
     }
 
     void runToTheEnd() {
         while (true) {
             auto current = active_tasks_.load(std::memory_order_relaxed);
+            if (current == 0)
+                break;
 
             active_tasks_.wait(current, std::memory_order_relaxed);
             if (active_tasks_.load(std::memory_order_relaxed) == 0)
@@ -52,7 +63,7 @@ private:
         return std::thread::hardware_concurrency();
     }
 
-    std::atomic<unsigned> active_tasks_;
+    std::atomic<unsigned> active_tasks_ = 0;
     Policy policy_;
     std::deque<Context> contexts_;
 };
