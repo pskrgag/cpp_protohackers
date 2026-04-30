@@ -1,7 +1,10 @@
 #include <cocur/fs/file.h>
 #include <cocur/net/tcp.h>
 #include <cocur/scheduler/scheduler.h>
+#include <cocur/timer/timer.h>
 #include <gtest/gtest.h>
+
+using namespace std::chrono_literals;
 
 cocur::Task<> handle_client(cocur::Scheduler<> &engine, std::shared_ptr<cocur::TcpClient> client) {
     std::byte buffer[1000] = {};
@@ -72,6 +75,31 @@ TEST(Engine, Cancel) {
         sleep(1);
 
         handle.cancel();
+        engine.runToTheEnd();
+    }
+}
+
+cocur::Task<> sleep(std::atomic<int> &flag) {
+    co_await cocur::sleepFor(1s);
+    flag.store(1, std::memory_order_relaxed);
+}
+
+cocur::Task<> wait(std::atomic<int> &flagParent) {
+    std::atomic<int> flag = 0;
+    co_await sleep(flag);
+
+    EXPECT_EQ(flag.load(std::memory_order_relaxed), 1);
+    flagParent.store(1, std::memory_order_relaxed);
+}
+
+TEST(Engine, Join) {
+    {
+        cocur::Scheduler engine;
+        std::atomic<int> flag = 0;
+
+        auto handle = engine.spawn(wait(flag));
+        handle.join();
+        EXPECT_EQ(flag.load(std::memory_order_relaxed), 1);
         engine.runToTheEnd();
     }
 }

@@ -157,7 +157,7 @@ private:
 
 class Write : public AsyncSyscall {
 public:
-    Write(const Socket &socket, std::span<const std::byte> span)
+    Write(const Fd &socket, std::span<const std::byte> span)
         : socket_(socket), span_(span), origSize_(span.size()) {
     }
 
@@ -197,7 +197,7 @@ protected:
 
 private:
     size_t origSize_;
-    const Socket &socket_;
+    const Fd &socket_;
     std::span<const std::byte> span_;
 };
 
@@ -220,6 +220,23 @@ private:
     const Socket &socket_;
     struct sockaddr *addr_;
     size_t size_;
+};
+
+class Timeout : public AsyncSyscall {
+public:
+    Timeout(struct timespec ts) : ts_(ts) {
+    }
+
+    virtual bool call(ssize_t &res) noexcept override {
+        return true;
+    }
+
+    virtual void prepareSleep(AsyncSyscall *parent) noexcept override {
+        current_context()->engine().ring().attachTimout(ts_, parent);
+    }
+
+private:
+    struct timespec ts_;
 };
 
 } // namespace detail

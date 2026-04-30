@@ -9,9 +9,9 @@
 
 #include <cocur/linux/fd.h>
 #include <functional>
-#include <print>
 #include <liburing.h>
 #include <memory>
+#include <print>
 #include <stdexcept>
 
 namespace cocur {
@@ -44,6 +44,13 @@ public:
         auto sqe = allocate_sqe(data);
 
         io_uring_prep_connect(sqe, socket.fd(), addr, size);
+    }
+
+    void attachTimout(struct timespec ts, void *data) {
+        auto sqe = allocate_sqe(data);
+        auto kern_ts = (__kernel_timespec){.tv_sec = ts.tv_sec, .tv_nsec = ts.tv_nsec};
+
+        io_uring_prep_timeout(sqe, &kern_ts, 1, 0);
     }
 
     void attachWrite(const Fd &socket, const void *buffer, size_t size, void *data) {

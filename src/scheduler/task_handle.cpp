@@ -13,7 +13,10 @@ void TaskHandle::cancel() {
         if (!ctx)
             return;
 
-        ctx->engine().requestCancel(state);
+        if (!state->completed_.load(std::memory_order_relaxed)) {
+            ctx->engine().requestCancel(state);
+        }
+
         state = state->child_.load(std::memory_order_relaxed);
     } while (state);
 }
